@@ -11,14 +11,6 @@ GKE uses CRIU (Checkpoint/Restore In Userspace) to capture the memory image of a
 - Restoring a pod from a snapshot
 - Measuring startup time difference with and without snapshots
 
-## Duration
-
-45–60 minutes
-
-## Cost
-
-~$0.20–$0.50 depending on machine type and cluster lifetime.
-
 ## Prerequisites
 
 - `gcloud` CLI authenticated
@@ -30,8 +22,6 @@ GKE uses CRIU (Checkpoint/Restore In Userspace) to capture the memory image of a
 gcloud services enable container.googleapis.com
 ```
 
----
-
 ## Set variables
 
 ```bash
@@ -40,16 +30,12 @@ export CLUSTER_NAME=lab-pod-snapshots
 export ZONE=us-central1-a
 ```
 
----
-
 ## Clone the repo
 
 ```bash
 git clone https://github.com/misskecupbung/gke-pod-snapshots.git
 cd gke-pod-snapshots
 ```
-
----
 
 ## Step 1 — Create a cluster with Pod Snapshots enabled
 
@@ -73,8 +59,6 @@ kubectl get crd | grep snapshot
 
 You should see `podsnapshots.snapshot.gke.io`.
 
----
-
 ## Step 2 — Deploy the slow-start app
 
 Before using snapshots, we need a baseline. This app waits 30 seconds on startup to simulate model loading, then serves HTTP.
@@ -97,8 +81,6 @@ Check the startup time from pod events. We'll compare this number after the rest
 kubectl describe pod $POD | grep -A5 "Started\|Ready"
 ```
 
----
-
 ## Step 3 — Create a snapshot
 
 Now take the snapshot while the app is running. The container stays up during this process.
@@ -115,8 +97,6 @@ kubectl describe podsnapshot slow-app-snapshot
 ```
 
 The `Status.Checkpoint.Uri` field shows the GCS path where the snapshot is stored.
-
----
 
 ## Step 4 — Delete the pod and restore from snapshot
 
@@ -139,8 +119,6 @@ kubectl exec $POD -- wget -qO- http://localhost:8080/ready
 
 Compare this startup time with what you recorded in Step 2.
 
----
-
 ## Step 5 — Use with a Deployment
 
 In Step 4 we restored a single pod manually. In practice, you want every restart to use the snapshot automatically. Add the annotation to the Deployment template and GKE will load from the snapshot on each pod restart — crash, rolling update, or node drain.
@@ -156,8 +134,6 @@ kubectl delete pod -l app=slow-app-deployment --wait=false
 kubectl get pods -l app=slow-app-deployment -w
 ```
 
----
-
 ## Step 6 — Clean up
 
 ```bash
@@ -165,8 +141,6 @@ kubectl delete -f manifests/
 kubectl delete podsnapshot --all
 gcloud container clusters delete $CLUSTER_NAME --zone $ZONE --quiet
 ```
-
----
 
 ## Limitations
 
