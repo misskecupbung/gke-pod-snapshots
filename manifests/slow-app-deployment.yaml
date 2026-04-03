@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slow-app-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: slow-app-deployment
+  template:
+    metadata:
+      labels:
+        app: slow-app-deployment
+      annotations:
+        # All pods created by this Deployment will restore from this snapshot.
+        # When a pod restarts for any reason (crash, node drain, rolling update),
+        # the replacement starts from the snapshot instead of cold-starting.
+        snapshot.gke.io/restore-from: "slow-app-snapshot"
+    spec:
+      containers:
+      - name: app
+        image: python:3.11-slim
+        command: ["python3", "/app/server.py"]
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 1
+          periodSeconds: 2
+          failureThreshold: 10
+      volumes:
+      - name: app-code
+        configMap:
+          name: slow-app-code
