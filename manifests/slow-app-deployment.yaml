@@ -17,6 +17,12 @@ spec:
         # the replacement starts from the snapshot instead of cold-starting.
         snapshot.gke.io/restore-from: "slow-app-snapshot"
     spec:
+      nodeSelector:
+        cloud.google.com/gke-nodepool: gvisor-pool
+      tolerations:
+      - key: sandbox.gke.io/runtime
+        value: gvisor
+        effect: NoSchedule
       containers:
       - name: app
         image: python:3.11-slim
