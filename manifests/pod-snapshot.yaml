@@ -9,7 +9,7 @@
 # Check the GKE docs for the latest API version:
 # https://cloud.google.com/kubernetes-engine/docs/how-to/pod-snapshots
 
-apiVersion: snapshot.gke.io/v1
+apiVersion: podsnapshot.gke.io/v1
 kind: PodSnapshot
 metadata:
   name: slow-app-snapshot

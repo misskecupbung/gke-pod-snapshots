@@ -70,6 +70,8 @@ spec:
       labels:
         app: slow-app
     spec:
+      nodeSelector:
+        cloud.google.com/gke-nodepool: gvisor-pool
       containers:
       - name: app
         image: python:3.11-slim
