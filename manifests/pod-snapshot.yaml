@@ -1,24 +1,36 @@
-# PodSnapshot resource
-# This tells GKE to checkpoint the memory state of the selected pod.
-# The snapshot is stored in a GCS bucket in your project.
+# PodSnapshotStorageConfig: tells GKE which GCS bucket to store snapshots in.
+# Replace BUCKET_NAME with your bucket name (created in Step 1).
 #
 # Requirements:
-#   - Cluster must be created with --enable-pod-snapshots
-#   - The target pod must be running and in a ready state
+#   - Cluster must have --enable-pod-snapshots
+#   - GCS bucket must have hierarchical namespaces and no soft delete
+#   - KSA must have roles/storage.objectUser + roles/storage.bucketViewer on the bucket
 #
-# Check the GKE docs for the latest API version:
-# https://cloud.google.com/kubernetes-engine/docs/how-to/pod-snapshots
-
-apiVersion: podsnapshot.gke.io/v1
-kind: PodSnapshot
+# Docs: https://cloud.google.com/kubernetes-engine/docs/how-to/pod-snapshots
+apiVersion: podsnapshot.gke.io/v1alpha1
+kind: PodSnapshotStorageConfig
 metadata:
-  name: slow-app-snapshot
+  name: slow-app-storage-config
+spec:
+  snapshotStorageConfig:
+    gcs:
+      bucket: "BUCKET_NAME"
+      path: "slow-app"
+---
+# PodSnapshotPolicy: selects which pods to snapshot and how to trigger them.
+# triggerConfig.type: manual means we trigger via PodSnapshotManualTrigger.
+apiVersion: podsnapshot.gke.io/v1alpha1
+kind: PodSnapshotPolicy
+metadata:
+  name: slow-app-snapshot-policy
   namespace: default
 spec:
-  # Select the pod to checkpoint
-  podSelector:
+  storageConfigName: slow-app-storage-config
+  selector:
     matchLabels:
       app: slow-app
-  # Optional: retention policy (default is to keep the snapshot until manually deleted)
-  retentionPolicy:
+  triggerConfig:
+    type: manual
+    postCheckpoint: resume
+  retentionConfig:
     maxSnapshots: 3

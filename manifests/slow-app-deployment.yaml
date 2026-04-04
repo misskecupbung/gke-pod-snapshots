@@ -17,6 +17,8 @@ spec:
         # the replacement starts from the snapshot instead of cold-starting.
         snapshot.gke.io/restore-from: "slow-app-snapshot"
     spec:
+      serviceAccountName: slow-app-sa
+      runtimeClassName: gvisor
       nodeSelector:
         cloud.google.com/gke-nodepool: gvisor-pool
       tolerations:

@@ -1,0 +1,13 @@
+# PodSnapshotManualTrigger: triggers an on-demand snapshot for a specific pod.
+# Replace POD_NAME with the actual pod name (get it from: kubectl get pods -l app=slow-app)
+#
+# The PodSnapshotPolicy for this pod must have triggerConfig.type: manual.
+# After applying this, GKE creates a PodSnapshot resource automatically.
+# Check with: kubectl get podsnapshots.podsnapshot.gke.io -n default
+apiVersion: podsnapshot.gke.io/v1alpha1
+kind: PodSnapshotManualTrigger
+metadata:
+  name: slow-app-trigger
+  namespace: default
+spec:
+  targetPod: POD_NAME

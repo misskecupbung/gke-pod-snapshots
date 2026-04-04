@@ -56,6 +56,15 @@ data:
     print("HTTP server started on :8080")
     server.serve_forever()
 ---
+# ServiceAccount for the slow-app pod.
+# Pod Snapshots use Workload Identity to write snapshots to GCS,
+# so the pod needs a KSA with IAM binding on the snapshot bucket.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: slow-app-sa
+  namespace: default
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -70,6 +79,8 @@ spec:
       labels:
         app: slow-app
     spec:
+      serviceAccountName: slow-app-sa
+      runtimeClassName: gvisor
       nodeSelector:
         cloud.google.com/gke-nodepool: gvisor-pool
       tolerations:

@@ -69,14 +69,50 @@ gcloud beta container node-pools create gvisor-pool \
   --sandbox type=gvisor
 ```
 
-Pods must run in GKE Sandbox because Pod Snapshots depend on the gVisor runtime it provides. The `gvisor-pool` nodes have this. Get credentials and check the CRD is installed:
+Pods must run in GKE Sandbox because Pod Snapshots depend on the gVisor runtime it provides. Get credentials and check the CRDs are installed:
 
 ```bash
 gcloud container clusters get-credentials $CLUSTER_NAME --zone $ZONE
-kubectl get crd | grep snapshot
+kubectl get crd | grep podsnapshot
 ```
 
-You should see `podsnapshots.snapshot.gke.io`.
+You should see `podsnapshots.podsnapshot.gke.io` and a few related CRDs.
+
+Now create a GCS bucket to store snapshots. The bucket must be in the same region as the cluster, have hierarchical namespaces enabled, and have soft delete disabled:
+
+```bash
+export BUCKET_NAME=pod-snapshots-$PROJECT_ID
+gcloud storage buckets create gs://$BUCKET_NAME \
+  --location=$ZONE \
+  --uniform-bucket-level-access \
+  --enable-hierarchical-namespace \
+  --soft-delete-duration=0d
+```
+
+Grant the pod's service account permission to read and write to the bucket:
+
+```bash
+export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+
+gcloud storage buckets add-iam-policy-binding gs://$BUCKET_NAME \
+  --member="principal://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$PROJECT_ID.svc.id.goog/subject/ns/default/sa/slow-app-sa" \
+  --role="roles/storage.bucketViewer"
+
+gcloud storage buckets add-iam-policy-binding gs://$BUCKET_NAME \
+  --member="principal://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$PROJECT_ID.svc.id.goog/subject/ns/default/sa/slow-app-sa" \
+  --role="roles/storage.objectUser"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:service-$PROJECT_NUMBER@container-engine-robot.iam.gserviceaccount.com" \
+  --role="roles/storage.objectUser" \
+  --condition="expression=resource.name.startsWith(\"projects/_/buckets/$BUCKET_NAME\"),title=restrict_to_bucket,description=Restricts access to one bucket only"
+```
+
+Set the bucket name in the snapshot manifests:
+
+```bash
+sed -i "s/BUCKET_NAME/$BUCKET_NAME/g" manifests/pod-snapshot.yaml
+```
 
 ## Step 2 — Deploy the slow-start app
 
@@ -91,7 +127,10 @@ Wait until the pod is `Running`. It takes about 35 seconds. Check it's working:
 
 ```bash
 POD=$(kubectl get pod -l app=slow-app -o jsonpath='{.items[0].metadata.name}')
-kubectl exec $POD -- python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/ready').read().decode())" from pod events. We'll compare this number after the restore in Step 4:
+kubectl exec $POD -- python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/ready').read().decode())"
+```
+
+Check the startup time from pod events. We'll compare this number after the restore in Step 4:
 
 ```bash
 kubectl describe pod $POD | grep -A5 "Started\|Ready"
@@ -99,35 +138,40 @@ kubectl describe pod $POD | grep -A5 "Started\|Ready"
 
 ## Step 3 — Create a snapshot
 
-Now take the snapshot while the app is running. The container stays up during this process.
+First, apply the snapshot policy. This tells GKE which pods to watch and where to store their snapshots:
 
 ```bash
 kubectl apply -f manifests/pod-snapshot.yaml
-kubectl get podsnapshot -w
 ```
 
-Wait for the status to show `Completed`. This takes 30–60 seconds. GKE freezes the container briefly, saves the memory image to GCS, then unfreezes it.
+Now trigger the snapshot manually. Replace `$POD` with the pod name from Step 2:
 
 ```bash
-kubectl describe podsnapshot slow-app-snapshot
+sed "s/POD_NAME/$POD/" manifests/pod-snapshot-trigger.yaml | kubectl apply -f -
 ```
 
-The `Status.Checkpoint.Uri` field shows the GCS path where the snapshot is stored.
+GKE creates a `PodSnapshot` resource automatically. Wait for it to show `AllSnapshotsAvailable`:
+
+```bash
+kubectl get podsnapshots.podsnapshot.gke.io -n default -w
+```
+
+This takes 30–60 seconds. GKE freezes the container briefly, writes the memory image to GCS, then unfreezes it. The pod keeps running.
 
 ## Step 4 — Delete the pod and restore from snapshot
 
-Delete the original pod and start a new one from the snapshot. This is where you see the difference.
+Delete the pod and redeploy it with the same spec. GKE matches the pod spec to the snapshot and restores automatically. This is where you see the difference.
 
 ```bash
 kubectl delete -f manifests/slow-app.yaml
-kubectl apply -f manifests/slow-app-restore.yaml
+kubectl apply -f manifests/slow-app.yaml
 kubectl get pods -w
 ```
 
 The pod reaches `Running` in a few seconds. The 30-second init did not run — the process loaded from the saved state.
 
 ```bash
-POD=$(kubectl get pod -l app=slow-app-restore -o jsonpath='{.items[0].metadata.name}')
+POD=$(kubectl get pod -l app=slow-app -o jsonpath='{.items[0].metadata.name}')
 kubectl exec $POD -- python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/ready').read().decode())"
 ```
 
@@ -137,7 +181,7 @@ Compare this startup time with what you recorded in Step 2.
 
 ## Step 5 — Use with a Deployment
 
-In Step 4 we restored a single pod manually. In practice, you want every restart to use the snapshot automatically. Add the annotation to the Deployment template and GKE will load from the snapshot on each pod restart — crash, rolling update, or node drain.
+In Step 4 we restored a single pod manually. In practice, you want every restart to use the snapshot automatically. The Deployment uses the same pod spec — GKE will match and restore on each restart.
 
 ```bash
 kubectl apply -f manifests/slow-app-deployment.yaml
@@ -154,7 +198,8 @@ kubectl get pods -l app=slow-app-deployment -w
 
 ```bash
 kubectl delete -f manifests/
-kubectl delete podsnapshot --all
+kubectl delete podsnapshots.podsnapshot.gke.io --all -n default
+gcloud storage buckets delete gs://$BUCKET_NAME --recursive
 gcloud container clusters delete $CLUSTER_NAME --zone $ZONE --quiet
 ```
 

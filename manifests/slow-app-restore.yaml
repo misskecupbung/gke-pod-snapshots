@@ -57,47 +57,12 @@ data:
     print("HTTP server started on :8080")
     server.serve_forever()
 ---
-# Pod with snapshot restore
-# This pod will restore from the 'slow-app-snapshot' checkpoint
-# instead of running the init code from scratch.
-apiVersion: v1
-kind: Pod
-metadata:
-  name: slow-app-restore
-  labels:
-    app: slow-app-restore
-  annotations:
-    # Reference the snapshot to restore from.
-    # GKE will restore the container memory state from this snapshot.
-    snapshot.gke.io/restore-from: "slow-app-snapshot"
-spec:
-  nodeSelector:
-    cloud.google.com/gke-nodepool: gvisor-pool
-  tolerations:
-  - key: sandbox.gke.io/runtime
-    value: gvisor
-    effect: NoSchedule
-  containers:
-  - name: app
-    image: python:3.11-slim
-    command: ["python3", "/app/server.py"]
-    ports:
-    - containerPort: 8080
-    volumeMounts:
-    - name: app-code
-      mountPath: /app
-    resources:
-      requests:
-        cpu: "200m"
-        memory: "256Mi"
-    readinessProbe:
-      httpGet:
-        path: /ready
-        port: 8080
-      initialDelaySeconds: 1
-      periodSeconds: 2
-      failureThreshold: 10
-  volumes:
-  - name: app-code
-    configMap:
-      name: slow-app-code
+# Restore is automatic with the new Pod Snapshots API.
+# GKE matches the pod spec hash and restores from the latest compatible snapshot.
+# To restore: delete the slow-app deployment and re-apply manifests/slow-app.yaml.
+#
+#   kubectl delete -f manifests/slow-app.yaml
+#   kubectl apply -f manifests/slow-app.yaml
+#
+# If a matching PodSnapshot exists, the pod starts from the saved state.
+# No separate restore manifest is needed.
