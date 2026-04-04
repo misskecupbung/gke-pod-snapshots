@@ -28,6 +28,7 @@ gcloud services enable container.googleapis.com storage.googleapis.com
 export PROJECT_ID=$(gcloud config get-value project)
 export CLUSTER_NAME=lab-pod-snapshots
 export ZONE=us-central1-a
+export REGION=us-central1
 ```
 
 ## Clone the repo
@@ -83,10 +84,11 @@ Now create a GCS bucket to store snapshots. The bucket must be in the same regio
 ```bash
 export BUCKET_NAME=pod-snapshots-$PROJECT_ID
 gcloud storage buckets create gs://$BUCKET_NAME \
-  --location=$ZONE \
+  --location=US \
   --uniform-bucket-level-access \
   --enable-hierarchical-namespace \
   --soft-delete-duration=0d
+gcloud storage ls
 ```
 
 Grant the pod's service account permission to read and write to the bucket:

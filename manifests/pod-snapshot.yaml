@@ -32,5 +32,3 @@ spec:
   triggerConfig:
     type: manual
     postCheckpoint: resume
-  retentionConfig:
-    maxSnapshots: 3
