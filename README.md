@@ -160,6 +160,12 @@ kubectl get podsnapshots.podsnapshot.gke.io -n default -w
 
 This takes 30–60 seconds. GKE freezes the container briefly, writes the memory image to GCS, then unfreezes it. The pod keeps running.
 
+To confirm the snapshot completed, describe it:
+
+```bash
+kubectl describe podsnapshots.podsnapshot.gke.io -n default
+```
+
 ## Step 4 — Delete the pod and restore from snapshot
 
 Delete the pod and redeploy it with the same spec. GKE matches the pod spec to the snapshot and restores automatically. This is where you see the difference.
@@ -215,7 +221,7 @@ Not all apps work well with snapshots.
 - **Network connections.** TCP connections in the snapshot are no longer valid on restore. Apps that open new connections when needed are fine. Apps that keep long-lived connections open may fail.
 - **Expired credentials.** Tokens, leases, and sessions may have expired by restore time. The app needs to handle re-authentication.
 - **Node-specific state.** If init stored something tied to the original node's IP or identity, restoring on a different node can break things.
-- **Snapshot freshness.** If the content changes — new model weights, updated config — the old snapshot is no longer useful. Create a new one. `maxSnapshots: 3` keeps the last 3 versions.
+- **Snapshot freshness.** If the content changes — new model weights, updated config — the old snapshot is no longer useful. Create a new one.
 
 The best fit is a stateless server that loads a large file or model once, then handles requests.
 
