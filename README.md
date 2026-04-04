@@ -201,7 +201,7 @@ kubectl get pods -l app=slow-app-deployment -w
 ```bash
 kubectl delete -f manifests/
 kubectl delete podsnapshots.podsnapshot.gke.io --all -n default
-gcloud storage buckets delete gs://$BUCKET_NAME --recursive
+gcloud storage rm gs://$BUCKET_NAME --recursive
 gcloud container clusters delete $CLUSTER_NAME --zone $ZONE --quiet
 ```
 
